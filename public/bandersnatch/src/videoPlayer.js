@@ -1,9 +1,12 @@
 class VideoMediaPlayer {
-  constructor({ manifestJSON, network }) {
+  constructor({ manifestJSON, network, videoComponent }) {
     this.manifestJSON = manifestJSON;
     this.network = network;
+    this.videoComponent = videoComponent;
+
     this.videoElement = null;
     this.sourceBuffer = null;
+    this.activeItem = {};
     this.selected = {};
     this.videoDuration = 0;
   }
@@ -38,13 +41,41 @@ class VideoMediaPlayer {
       // evita rodar como "LIVE"
       mediaSource.duration = this.videoDuration;
       await this.fileDownload(selected.url);
+      setInterval(this.waitForQuestions.bind(this), 200);
     };
   }
 
+  async currentFileResolution() {
+    const LOWER_RESOLUTION = 144;
+    const prepareUrl = {
+      url: this.manifestJSON.finalizar.url,
+      fileResolution: LOWER_RESOLUTION,
+      fileResolutionTag: this.manifestJSON.fileResolutionTag,
+      hostTag: this.manifestJSON.hostTag,
+    };
+    const url = this.network.parseManifestURL(prepareUrl);
+    return this.network.getProperResolution(url);
+  }
+
+  async nextChunk(data) {
+    const key = data.toLowerCase();
+    const selected = this.manifestJSON[key];
+    this.selected = {
+      ...selected,
+      // ajusta o tempo que o modal vai aparecer, baseado no tempo corrente
+      at: parseInt(this.videoElement.currentTime + selected.at),
+    };
+    // deixa o restante do video rodar enquanto baixa o novo video
+    this.videoElement.play();
+    await this.fileDownload(selected.url);
+  }
+
   async fileDownload(url) {
+    const fileResolution = await this.currentFileResolution();
+    console.log("fileResolution", fileResolution);
     const prepareUrl = {
       url,
-      fileResolution: 360,
+      fileResolution,
       fileResolutionTag: this.manifestJSON.fileResolutionTag,
       hostTag: this.manifestJSON.hostTag,
     };
@@ -54,10 +85,20 @@ class VideoMediaPlayer {
     return this.processBufferSegments(data);
   }
 
+  waitForQuestions() {
+    const currentTime = parseInt(this.videoElement.currentTime);
+    const option = this.selected.at === currentTime;
+    if (!option) return;
+    // evita que o modal seja aberto 2x no mesmo segundo
+    if (this.activeItem.url === this.selected.url) return;
+    this.videoComponent.configureModal(this.selected.options);
+    this.activeItem = this.selected;
+  }
+
   setVideoPlayerDuration(finalURL) {
     const bars = finalURL.split("/");
     const [name, videoDuration] = bars[bars.length - 1].split("-");
-    this.videoDuration += videoDuration;
+    this.videoDuration += parseFloat(videoDuration);
   }
 
   async processBufferSegments(allSegments) {
@@ -71,7 +112,7 @@ class VideoMediaPlayer {
 
         return resolve();
       };
-      sourceBuffer.addEventListener("updateend", () => {});
+      sourceBuffer.addEventListener("updateend", updateEnd);
       sourceBuffer.addEventListener("error", reject);
     });
   }

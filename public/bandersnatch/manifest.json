@@ -32,6 +32,6 @@
         "defaultOption": "Finalizar"
     },
     "finalizar": {
-        "url": "$HOST/timeline/02.encerramento/03.encerramento-4.733333-$RESOLUTION.mp4"
+        "url": "$HOST/timeline/03.encerramento/03.encerramento-4.733333-$RESOLUTION.mp4"
     }
 }
